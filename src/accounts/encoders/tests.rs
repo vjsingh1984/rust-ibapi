@@ -1,4 +1,4 @@
-use crate::{messages::OutgoingMessages, ToField};
+use crate::{messages::OutgoingMessages, server_versions, ToField};
 
 #[test]
 fn test_encode_request_positions() {
@@ -172,7 +172,7 @@ fn test_encode_cancel_pnl_single() {
 #[test]
 fn test_encode_request_account_summary() {
     let version = 1;
-    let server_version = 9; // Example server version
+    let server_version = server_versions::ACCOUNT_SUMMARY;
     let request_id = 3000;
     let group = "All";
     let tags: &[&str] = &["AccountType", "TotalCashValue"];
@@ -180,7 +180,6 @@ fn test_encode_request_account_summary() {
     let request = super::encode_request_account_summary(server_version, request_id, group, tags).expect("encode request account summary failed");
 
     assert_eq!(request[0], OutgoingMessages::RequestAccountSummary.to_field());
-    // assert_eq!(request[1], server_version.to_field());
     assert_eq!(request[1], version.to_field());
     assert_eq!(request[2], request_id.to_field());
     assert_eq!(request[3], group.to_string());

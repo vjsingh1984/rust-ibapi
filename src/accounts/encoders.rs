@@ -84,7 +84,6 @@ pub(super) fn encode_request_account_summary(_server_version: i32, request_id: i
     let mut message = RequestMessage::new();
 
     message.push_field(&OutgoingMessages::RequestAccountSummary);
-    // message.push_field(&server_version);
     message.push_field(&VERSION);
     message.push_field(&request_id);
     message.push_field(&group);
