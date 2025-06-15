@@ -474,7 +474,7 @@ pub(super) fn account_summary<'a>(client: &'a Client, group: &str, tags: &[&str]
     client.check_server_version(server_versions::ACCOUNT_SUMMARY, "It does not support account summary requests.")?;
 
     let request_id = client.next_request_id();
-    let request = encoders::encode_request_account_summary(request_id, group, tags)?;
+    let request = encoders::encode_request_account_summary(client.server_version, request_id, group, tags)?;
     let subscription = client.send_request(request_id, request)?;
 
     Ok(Subscription::new(client, subscription, ResponseContext::default()))

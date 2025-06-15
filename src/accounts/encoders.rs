@@ -78,12 +78,13 @@ pub(super) fn encode_cancel_pnl_single(request_id: i32) -> Result<RequestMessage
     encode_simple_with_request_id(OutgoingMessages::CancelPnLSingle, request_id)
 }
 
-pub(super) fn encode_request_account_summary(request_id: i32, group: &str, tags: &[&str]) -> Result<RequestMessage, Error> {
+pub(super) fn encode_request_account_summary(server_version: i32, request_id: i32, group: &str, tags: &[&str]) -> Result<RequestMessage, Error> {
     const VERSION: i32 = 1;
 
     let mut message = RequestMessage::new();
 
     message.push_field(&OutgoingMessages::RequestAccountSummary);
+    message.push_field(&server_version);
     message.push_field(&VERSION);
     message.push_field(&request_id);
     message.push_field(&group);

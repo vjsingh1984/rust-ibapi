@@ -172,17 +172,19 @@ fn test_encode_cancel_pnl_single() {
 #[test]
 fn test_encode_request_account_summary() {
     let version = 1;
+    let server_version = 9; // Example server version
     let request_id = 3000;
     let group = "All";
     let tags: &[&str] = &["AccountType", "TotalCashValue"];
 
-    let request = super::encode_request_account_summary(request_id, group, tags).expect("encode request account summary failed");
+    let request = super::encode_request_account_summary(server_version, request_id, group, tags).expect("encode request account summary failed");
 
     assert_eq!(request[0], OutgoingMessages::RequestAccountSummary.to_field());
-    assert_eq!(request[1], version.to_field());
-    assert_eq!(request[2], request_id.to_field());
-    assert_eq!(request[3], group.to_string());
-    assert_eq!(request[4], tags.join(","));
+    assert_eq!(request[1], server_version.to_field());
+    assert_eq!(request[2], version.to_field());
+    assert_eq!(request[3], request_id.to_field());
+    assert_eq!(request[4], group.to_string());
+    assert_eq!(request[5], tags.join(","));
 }
 
 #[test]
