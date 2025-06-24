@@ -12,6 +12,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use log::{debug, error, warn};
+use serde::de;
 use time::{Date, OffsetDateTime};
 use time_tz::Tz;
 
@@ -92,7 +93,7 @@ impl Client {
             time_zone: connection_metadata.time_zone,
             message_bus,
             client_id: connection_metadata.client_id,
-            next_request_id: AtomicI32::new(9000),
+            next_request_id: AtomicI32::new(1), 
             order_id: AtomicI32::new(connection_metadata.next_order_id),
         };
 
@@ -2107,16 +2108,20 @@ impl<'a, T: DataStream<T> + 'static> Subscription<'a, T> {
         // Only cancel if snapshot hasn't ended (for market data snapshots)
         // For streaming subscriptions, snapshot_ended will remain false
         if self.snapshot_ended.load(std::sync::atomic::Ordering::Relaxed) {
+            debug!("snapshot already ended, not cancelling subscription");
             return;
         }
 
         if self.cancelled.load(Ordering::Relaxed) {
+            debug!("subscription already cancelled, not cancelling again"); 
             return;
         }
 
+        debug!("request_id: {}, cancelling subscription", self.request_id.unwrap_or(-1));
         self.cancelled.store(true, Ordering::Relaxed);
 
         if let Some(request_id) = self.request_id {
+            debug!("cancelling subscription with request_id: {request_id}");
             if let Ok(message) = T::cancel_message(self.client.server_version(), self.request_id, &self.response_context) {
                 if let Err(e) = self.client.message_bus.cancel_subscription(request_id, &message) {
                     warn!("error cancelling subscription: {e}")
@@ -2124,6 +2129,7 @@ impl<'a, T: DataStream<T> + 'static> Subscription<'a, T> {
                 self.subscription.cancel();
             }
         } else if let Some(order_id) = self.order_id {
+            debug!("cancelling order subscription with order_id: {order_id}");
             if let Ok(message) = T::cancel_message(self.client.server_version(), self.request_id, &self.response_context) {
                 if let Err(e) = self.client.message_bus.cancel_order_subscription(order_id, &message) {
                     warn!("error cancelling order subscription: {e}")
@@ -2131,6 +2137,7 @@ impl<'a, T: DataStream<T> + 'static> Subscription<'a, T> {
                 self.subscription.cancel();
             }
         } else if let Some(message_type) = self.message_type {
+            debug!("cancelling shared subscription with message_type: {message_type:?}");
             if let Ok(message) = T::cancel_message(self.client.server_version(), self.request_id, &self.response_context) {
                 if let Err(e) = self.client.message_bus.cancel_shared_subscription(message_type, &message) {
                     warn!("error cancelling shared subscription: {e}")
@@ -2286,7 +2293,12 @@ impl<'a, T: DataStream<T> + 'static> Subscription<'a, T> {
 
 impl<T: DataStream<T> + 'static> Drop for Subscription<'_, T> {
     fn drop(&mut self) {
-        self.cancel();
+        if !self.cancelled.load(Ordering::Relaxed) {
+            debug!("request_id: {}, dropping subscription, cancelling if not already cancelled", self.request_id.unwrap_or(-1));
+            self.cancel();
+        } else {
+            debug!("request_id: {}, dropping subscription, already cancelled", self.request_id.unwrap_or(-1));
+        }
     }
 }
 
