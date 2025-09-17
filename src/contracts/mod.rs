@@ -31,10 +31,10 @@ pub mod types;
 
 // Feature-specific implementations
 #[cfg(feature = "sync")]
-mod sync;
+pub(crate) mod sync;
 
 #[cfg(feature = "async")]
-mod r#async;
+pub(crate) mod r#async;
 
 pub mod tick_types;
 
@@ -767,7 +767,9 @@ pub struct PriceIncrement {
 }
 
 // Re-export API functions based on active feature
-#[cfg(feature = "sync")]
+// Re-export internal functions - when both features enabled, default to async for backward compatibility
+// But provide explicit access to both via submodules
+#[cfg(all(feature = "sync", not(feature = "async")))]
 pub(crate) use sync::{calculate_implied_volatility, calculate_option_price, contract_details, market_rule, matching_symbols, option_chain};
 
 #[cfg(feature = "async")]

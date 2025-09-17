@@ -25,27 +25,16 @@
 // Feature guards
 #[cfg(not(any(feature = "sync", feature = "async")))]
 compile_error!(
-    "You must enable either the 'sync' or 'async' feature to use this crate.\n\
+    "No features enabled. This should not happen with default features.\n\
      \n\
      For synchronous (thread-based) API:\n\
-         cargo add ibapi --features sync\n\
+         cargo add ibapi --no-default-features --features sync\n\
      \n\
-     For asynchronous (tokio-based) API:\n\
-         cargo add ibapi --features async\n\
+     For asynchronous (tokio-based) API (default):\n\
+         cargo add ibapi\n\
      \n\
-     In Cargo.toml:\n\
-         ibapi = { version = \"2.0\", features = [\"sync\"] }  # or [\"async\"]\n\
-     \n\
-     Note: The 'sync' and 'async' features are mutually exclusive."
-);
-
-#[cfg(all(feature = "sync", feature = "async"))]
-compile_error!(
-    "The 'sync' and 'async' features are mutually exclusive.\n\
-     Please enable only one of them:\n\
-     \n\
-     For synchronous API: --features sync\n\
-     For asynchronous API: --features async"
+     For both APIs:\n\
+         cargo add ibapi --features sync"
 );
 
 /// Describes items present in an account.

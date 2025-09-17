@@ -47,7 +47,7 @@ pub enum MarketDataType {
     DelayedFrozen = 4,
 }
 
-#[cfg(feature = "sync")]
+#[cfg(all(feature = "sync", not(feature = "async")))]
 pub(crate) fn switch_market_data_type(client: &crate::Client, market_data_type: MarketDataType) -> Result<(), Error> {
     client.check_server_version(server_versions::REQ_MARKET_DATA_TYPE, "It does not support market data type requests.")?;
 
@@ -65,6 +65,21 @@ pub(crate) async fn switch_market_data_type(client: &crate::client::r#async::Cli
     client.send_message(message).await?;
 
     Ok(())
+}
+
+#[cfg(all(feature = "sync", feature = "async"))]
+pub(crate) mod blocking {
+    use super::*;
+    use crate::Error;
+
+    pub fn switch_market_data_type(client: &crate::client::blocking::Client, market_data_type: MarketDataType) -> Result<(), Error> {
+        client.check_server_version(crate::server_versions::REQ_MARKET_DATA_TYPE, "It does not support market data type requests.")?;
+
+        let message = super::encoders::encode_request_market_data_type(market_data_type)?;
+        let _ = client.send_shared_request(crate::messages::OutgoingMessages::RequestMarketDataType, message)?;
+
+        Ok(())
+    }
 }
 
 mod encoders {

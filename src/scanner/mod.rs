@@ -11,10 +11,10 @@ mod common;
 
 // Feature-specific implementations
 #[cfg(feature = "sync")]
-mod sync;
+pub(crate) mod sync;
 
 #[cfg(feature = "async")]
-mod r#async;
+pub(crate) mod r#async;
 
 // Public types - always available regardless of feature flags
 
@@ -105,7 +105,8 @@ pub struct ScannerData {
 }
 
 // Re-export API functions based on active feature
-#[cfg(feature = "sync")]
+// Re-export internal functions based on feature configuration
+#[cfg(all(feature = "sync", not(feature = "async")))]
 pub(crate) use sync::{scanner_parameters, scanner_subscription};
 
 #[cfg(feature = "async")]

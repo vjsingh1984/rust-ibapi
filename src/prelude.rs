@@ -32,7 +32,7 @@ pub use crate::market_data::realtime::{BarSize as RealtimeBarSize, TickTypes, Wh
 pub use crate::market_data::{MarketDataType, TradingHours};
 
 // Order types
-#[cfg(feature = "sync")]
+#[cfg(all(feature = "sync", not(feature = "async")))]
 pub use crate::orders::{order_builder, Action, ExecutionFilter, OrderUpdate, Orders, PlaceOrder};
 
 #[cfg(feature = "async")]
@@ -44,8 +44,9 @@ pub use crate::accounts::{
 };
 
 // Client subscription type
-#[cfg(feature = "sync")]
+#[cfg(all(feature = "sync", not(feature = "async")))]
 pub use crate::client::Subscription;
+
 #[cfg(feature = "async")]
 pub use crate::subscriptions::Subscription;
 

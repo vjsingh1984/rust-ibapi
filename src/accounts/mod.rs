@@ -252,17 +252,32 @@ pub struct AccountMultiValue {
 
 // Feature-specific implementations
 #[cfg(feature = "sync")]
-mod sync;
+pub(crate) mod sync;
 
 #[cfg(feature = "async")]
-mod r#async;
+pub(crate) mod r#async;
 
-#[cfg(feature = "sync")]
+// Re-export based on feature configuration
+#[cfg(all(feature = "sync", not(feature = "async")))]
 pub use sync::{
     account_summary, account_updates, account_updates_multi, family_codes, managed_accounts, pnl, pnl_single, positions, positions_multi, server_time,
 };
 
-#[cfg(feature = "async")]
+#[cfg(all(feature = "async", not(feature = "sync")))]
 pub use r#async::{
     account_summary, account_updates, account_updates_multi, family_codes, managed_accounts, pnl, pnl_single, positions, positions_multi, server_time,
 };
+
+// When both features are enabled, async is default
+#[cfg(all(feature = "sync", feature = "async"))]
+pub use r#async::{
+    account_summary, account_updates, account_updates_multi, family_codes, managed_accounts, pnl, pnl_single, positions, positions_multi, server_time,
+};
+
+// When both features are enabled, provide sync versions under blocking namespace
+#[cfg(all(feature = "sync", feature = "async"))]
+pub mod blocking {
+    pub use super::sync::{
+        account_summary, account_updates, account_updates_multi, family_codes, managed_accounts, pnl, pnl_single, positions, positions_multi, server_time,
+    };
+}

@@ -17,10 +17,10 @@ use common::encoders;
 
 // Feature-specific implementations
 #[cfg(feature = "sync")]
-mod sync;
+pub(crate) mod sync;
 
 #[cfg(feature = "async")]
-mod r#async;
+pub(crate) mod r#async;
 
 /// Wall Street Horizon metadata containing configuration and setup information.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -59,11 +59,22 @@ impl AutoFill {
 }
 
 // Re-export API functions based on active feature
-#[cfg(feature = "sync")]
+// Re-export functions based on feature configuration
+#[cfg(all(feature = "sync", not(feature = "async")))]
 pub use sync::{wsh_event_data_by_contract, wsh_event_data_by_filter, wsh_metadata};
 
-#[cfg(feature = "async")]
+#[cfg(all(feature = "async", not(feature = "sync")))]
 pub use r#async::{wsh_event_data_by_contract, wsh_event_data_by_filter, wsh_metadata};
+
+// When both features are enabled, async is default
+#[cfg(all(feature = "sync", feature = "async"))]
+pub use r#async::{wsh_event_data_by_contract, wsh_event_data_by_filter, wsh_metadata};
+
+// When both features are enabled, provide sync versions under blocking namespace
+#[cfg(all(feature = "sync", feature = "async"))]
+pub mod blocking {
+    pub use super::sync::{wsh_event_data_by_contract, wsh_event_data_by_filter, wsh_metadata};
+}
 
 // Tests that work with both sync and async features
 #[cfg(test)]

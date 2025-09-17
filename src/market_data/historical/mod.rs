@@ -430,11 +430,22 @@ impl ToField for Option<WhatToShow> {
 }
 
 // Re-export functions based on active feature
-#[cfg(feature = "sync")]
+// Re-export functions based on feature configuration
+#[cfg(all(feature = "sync", not(feature = "async")))]
 pub use sync::*;
 
-#[cfg(feature = "async")]
+#[cfg(all(feature = "async", not(feature = "sync")))]
 pub use r#async::*;
+
+// When both features are enabled, async is default
+#[cfg(all(feature = "sync", feature = "async"))]
+pub use r#async::*;
+
+// When both features are enabled, provide sync versions under blocking namespace
+#[cfg(all(feature = "sync", feature = "async"))]
+pub mod blocking {
+    pub use super::sync::*;
+}
 
 pub trait TickDecoder<T> {
     const MESSAGE_TYPE: IncomingMessages;
@@ -466,11 +477,17 @@ impl TickDecoder<TickMidpoint> for TickMidpoint {
 }
 
 // Re-export TickSubscription and iterator types based on active feature
-#[cfg(feature = "sync")]
+// Re-export subscription types based on feature configuration
+#[cfg(all(feature = "sync", not(feature = "async")))]
 pub use sync::{TickSubscription, TickSubscriptionIter, TickSubscriptionOwnedIter, TickSubscriptionTimeoutIter, TickSubscriptionTryIter};
 
-#[cfg(feature = "async")]
+#[cfg(all(feature = "async", not(feature = "sync")))]
 pub use r#async::TickSubscription;
+
+// When both features are enabled, async is default
+#[cfg(all(feature = "sync", feature = "async"))]
+pub use r#async::TickSubscription;
+
 
 #[cfg(test)]
 mod tests {

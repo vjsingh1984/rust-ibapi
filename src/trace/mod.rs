@@ -8,17 +8,28 @@ mod common;
 
 // Feature-specific implementations
 #[cfg(feature = "sync")]
-mod sync;
+pub(crate) mod sync;
 
 #[cfg(feature = "async")]
-mod r#async;
+pub(crate) mod r#async;
 
 // Public types - always available regardless of feature flags
 pub use common::Interaction;
 
 // Re-export API functions based on active feature
-#[cfg(feature = "sync")]
+// Re-export functions based on feature configuration
+#[cfg(all(feature = "sync", not(feature = "async")))]
 pub use sync::{last_interaction, record_request, record_response};
 
-#[cfg(feature = "async")]
+#[cfg(all(feature = "async", not(feature = "sync")))]
 pub use r#async::{last_interaction, record_request, record_response};
+
+// When both features are enabled, async is default
+#[cfg(all(feature = "sync", feature = "async"))]
+pub use r#async::{last_interaction, record_request, record_response};
+
+// When both features are enabled, provide sync versions under blocking namespace
+#[cfg(all(feature = "sync", feature = "async"))]
+pub mod blocking {
+    pub use super::sync::{last_interaction, record_request, record_response};
+}

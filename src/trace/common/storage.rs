@@ -1,23 +1,34 @@
 use super::{Interaction, SharedInteraction};
 use std::sync::Arc;
 
-#[cfg(feature = "sync")]
+#[cfg(all(feature = "sync", not(feature = "async")))]
 use std::sync::RwLock;
 
-#[cfg(feature = "async")]
+#[cfg(all(feature = "async", not(feature = "sync")))]
 use tokio::sync::RwLock;
 
 /// Global storage for the current interaction
-#[cfg(feature = "sync")]
-static CURRENT_INTERACTION: RwLock<Option<Arc<RwLock<Interaction>>>> = RwLock::new(None);
+#[cfg(all(feature = "sync", not(feature = "async")))]
+static CURRENT_INTERACTION: std::sync::RwLock<Option<Arc<std::sync::RwLock<Interaction>>>> = std::sync::RwLock::new(None);
 
 #[cfg(feature = "async")]
-static CURRENT_INTERACTION: RwLock<Option<Arc<RwLock<Interaction>>>> = RwLock::const_new(None);
+static CURRENT_INTERACTION: tokio::sync::RwLock<Option<Arc<tokio::sync::RwLock<Interaction>>>> = tokio::sync::RwLock::const_new(None);
+
+// When both features are enabled, we need both storages with different names
+#[cfg(all(feature = "sync", feature = "async"))]
+static SYNC_CURRENT_INTERACTION: std::sync::RwLock<Option<Arc<std::sync::RwLock<Interaction>>>> = std::sync::RwLock::new(None);
 
 /// Storage operations for sync mode
 #[cfg(feature = "sync")]
 pub(in crate::trace) mod sync_ops {
     use super::*;
+
+    // Choose the correct static based on features
+    #[cfg(not(feature = "async"))]
+    use super::CURRENT_INTERACTION;
+
+    #[cfg(all(feature = "sync", feature = "async"))]
+    use super::SYNC_CURRENT_INTERACTION as CURRENT_INTERACTION;
 
     /// Gets the last interaction if any
     pub fn get_last_interaction() -> Option<SharedInteraction> {
@@ -30,7 +41,7 @@ pub(in crate::trace) mod sync_ops {
 
     /// Starts a new interaction with the given request
     pub fn start_new_interaction(request: String) {
-        let new_interaction = Arc::new(RwLock::new(Interaction::new(request)));
+        let new_interaction = Arc::new(std::sync::RwLock::new(Interaction::new(request)));
         if let Ok(mut guard) = CURRENT_INTERACTION.write() {
             *guard = Some(new_interaction);
         }
@@ -60,6 +71,7 @@ pub(in crate::trace) mod sync_ops {
 #[cfg(feature = "async")]
 pub(in crate::trace) mod async_ops {
     use super::*;
+    use tokio::sync::RwLock;
 
     /// Gets the last interaction if any
     pub async fn get_last_interaction() -> Option<SharedInteraction> {

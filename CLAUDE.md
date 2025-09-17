@@ -6,23 +6,27 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 The rust-ibapi crate is a Rust implementation of the Interactive Brokers TWS API with both synchronous and asynchronous support.
 
-**Important:** You MUST choose exactly ONE feature flag:
-- `--features sync` for synchronous (thread-based) execution
-- `--features async` for asynchronous (tokio-based) execution
-
-These features are mutually exclusive.
+**Default:** The crate uses async by default. No feature flags needed for async usage.
 
 ```bash
-# Build with sync support
+# Build with async support (default)
+cargo build
+
+# Build with sync support only
+cargo build --no-default-features --features sync
+
+# Build with both sync and async support
 cargo build --features sync
 
-# Build with async support  
-cargo build --features async
-
-# Run tests (test both modes separately)
-cargo test --features sync
-cargo test --features async
+# Run tests
+cargo test                    # async (default)
+cargo test --features sync   # both features
 ```
+
+**Feature combinations:**
+- **Default (async only)**: `cargo build` - Async API available
+- **Sync only**: `cargo build --no-default-features --features sync` - Sync API only
+- **Both features**: `cargo build --features sync` - Async API by default, sync under `blocking::` namespace
 
 ## Documentation Index
 
@@ -44,8 +48,8 @@ cargo test --features async
 
 ## Key Points to Remember
 
-1. **Always specify exactly ONE feature**: The crate requires either `sync` OR `async` (mutually exclusive)
-2. **Test both modes separately**: Changes should work for both sync and async implementations
+1. **Async by default**: The crate uses async by default. Sync is opt-in via `--no-default-features --features sync`
+2. **Test different configurations**: Test async (default), sync-only, and when relevant, both features enabled
 3. **Follow module structure**: Use the common pattern for shared logic between sync/async
 4. **Minimal comments**: Keep comments concise, avoid stating the obvious
 5. **Run quality checks**: Before committing, run `cargo fmt`, `cargo clippy --features sync`, and `cargo clippy --features async`

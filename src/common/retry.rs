@@ -75,7 +75,7 @@ mod async_retry {
 }
 
 // Re-export based on feature flags
-#[cfg(feature = "sync")]
+#[cfg(all(feature = "sync", not(feature = "async")))]
 pub use sync_retry::*;
 
 #[cfg(feature = "async")]
