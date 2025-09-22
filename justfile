@@ -14,10 +14,13 @@ tag VERSION:
 versions:
     @git tag
 
-# Run tests for both sync and async features
+# Run tests across feature configurations
 test:
-    @echo "Running sync tests..."
+    @echo "Running default (async) tests..."
+    cargo test
+    @echo ""
+    @echo "Running async + sync tests..."
     cargo test --features sync
     @echo ""
-    @echo "Running async tests..."
-    cargo test --features async
+    @echo "Running sync-only tests..."
+    cargo test --no-default-features --features sync

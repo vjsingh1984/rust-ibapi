@@ -10,11 +10,13 @@ cargo run --features sync --example connect
 cargo run --features sync --example market_data
 cargo run --features sync --example positions
 
-# Async examples  
-cargo run --features async --example async_connect
-cargo run --features async --example async_market_data
-cargo run --features async --example async_positions
+# Async examples (default)
+cargo run --example async_connect
+cargo run --example async_market_data
+cargo run --example async_positions
 ```
+
+When both features are enabled, import the blocking client via `use ibapi::client::blocking::Client;` to access the sync examples without disabling defaults.
 
 ## Example Categories
 

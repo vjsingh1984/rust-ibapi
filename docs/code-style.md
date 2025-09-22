@@ -25,10 +25,11 @@ Always run `cargo fmt` before committing code. The project uses default rustfmt 
 
 ## Linting
 
-Run clippy for both feature flags before committing:
+Run clippy for every configuration before committing:
 ```bash
+cargo clippy -- -D warnings
 cargo clippy --features sync -- -D warnings
-cargo clippy --features async -- -D warnings
+cargo clippy --no-default-features --features sync -- -D warnings
 ```
 
 ## Naming Conventions

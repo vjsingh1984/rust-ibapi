@@ -17,29 +17,37 @@ The rust-ibapi library requires you to explicitly choose between synchronous (th
 - **sync**: Traditional synchronous API using threads and crossbeam channels
 - **async**: Asynchronous API using tokio tasks and broadcast channels
 
-You must specify exactly one feature when using this crate:
+Async support ships in the default feature set. Add the optional `sync` feature when you need the blocking API:
 
 ```toml
 # From crates.io (Note: v2.0 not yet published, use GitHub for now):
-ibapi = { version = "2.0", features = ["sync"] }   # For synchronous API
-# OR
-ibapi = { version = "2.0", features = ["async"] }  # For asynchronous API
+ibapi = "2.0"                               # Async-only (default)
+ibapi = { version = "2.0", features = ["sync"] }   # Async + sync
 
 # From GitHub (recommended until v2.0 is published):
-ibapi = { git = "https://github.com/wboayue/rust-ibapi", features = ["sync"] }
-# OR
-ibapi = { git = "https://github.com/wboayue/rust-ibapi", features = ["async"] }
+ibapi = { git = "https://github.com/wboayue/rust-ibapi" }                  # Async-only
+ibapi = { git = "https://github.com/wboayue/rust-ibapi", features = ["sync"] }  # Async + sync
+```
+
+To target only the blocking client, disable defaults and opt in to `sync`:
+
+```toml
+ibapi = { version = "2.0", default-features = false, features = ["sync"] }
 ```
 
 ```bash
-# Build and test examples:
-cargo build --features sync
+# Build and test configurations
+cargo build                  # Async (default)
+cargo test
+
+cargo build --features sync  # Async + sync (sync client available under client::blocking)
 cargo test --features sync
 
-# Or for async:
-cargo build --features async
-cargo test --features async
-cargo run --features async --example async_connect
+cargo build --no-default-features --features sync  # Sync-only
+cargo test --no-default-features --features sync
+
+cargo run --example async_connect            # Async example (default)
+cargo run --features sync --example orders    # Sync example via client::blocking
 ```
 
 > **🚧 Work in Progress**: Version 2.0 is currently under active development and includes significant architectural improvements, async/await support, and enhanced features. The current release (1.x) remains stable and production-ready.

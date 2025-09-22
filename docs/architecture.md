@@ -1,6 +1,6 @@
 # Architecture Overview
 
-The rust-ibapi crate is a Rust implementation of the Interactive Brokers TWS API. The architecture supports both synchronous (thread-based) and asynchronous (tokio-based) operation modes through mutually exclusive feature flags.
+The rust-ibapi crate is a Rust implementation of the Interactive Brokers TWS API. The architecture supports both asynchronous (tokio-based) and synchronous (thread-based) operation modes: async ships by default, and the optional `sync` feature adds blocking helpers (surfaced under `client::blocking` and related modules).
 
 ## System Architecture
 

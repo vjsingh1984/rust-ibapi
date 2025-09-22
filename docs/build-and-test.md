@@ -4,41 +4,50 @@
 
 ### Basic Build
 ```bash
-# Build with sync support
+# Build with default async support
+cargo build
+
+# Build with sync support layered on top
 cargo build --features sync
 
-# Build with async support
-cargo build --features async
+# Sync-only build (no async dependencies)
+cargo build --no-default-features --features sync
 
 # Release build with optimizations
+cargo build --release
 cargo build --release --features sync
-cargo build --release --features async
+cargo build --release --no-default-features --features sync
 
 # Build all targets including examples
+cargo build --all-targets
 cargo build --all-targets --features sync
-cargo build --all-targets --features async
+cargo build --all-targets --no-default-features --features sync
 ```
 
 ### Running Tests
 
 ```bash
-# Run sync tests
+# Run async tests (default)
+cargo test
+
+# Run async + sync tests
 cargo test --features sync
 
-# Run async tests
-cargo test --features async
-
 # Run specific test
+cargo test test_name
 cargo test test_name --features sync
+cargo test test_name --no-default-features --features sync
 
 # Test specific module
+cargo test --package ibapi module_name::
 cargo test --package ibapi module_name:: --features sync
+cargo test --package ibapi module_name:: --no-default-features --features sync
 
 # Run with output
-cargo test --features sync -- --nocapture
+cargo test -- --nocapture
 
 # Run doctests only
-cargo test --doc --features sync
+cargo test --doc
 ```
 
 ### Code Quality
@@ -51,8 +60,9 @@ cargo fmt
 cargo fmt --check
 
 # Run clippy
+cargo clippy -- -D warnings
 cargo clippy --features sync -- -D warnings
-cargo clippy --features async -- -D warnings
+cargo clippy --no-default-features --features sync -- -D warnings
 
 # Generate coverage report
 cargo tarpaulin -o html
@@ -125,24 +135,27 @@ fn test_message_format() {
 }
 ```
 
-## Running Tests for Both Modes
+## Running Tests Across Configurations
 
-Always test both implementations:
+Always exercise the default async build, async+sync, and sync-only variants:
 
 ```bash
-# Using just command
+# Using just command (runs all configurations)
 just test
 
-# Or manually
+# Manually
+cargo test
 cargo test --features sync
-cargo test --features async
+cargo test --no-default-features --features sync
 
-# Test everything (tests + clippy + fmt)
+# Full quality gate (fmt + clippy + tests)
 cargo fmt --check && \
+cargo clippy -- -D warnings && \
 cargo clippy --features sync -- -D warnings && \
-cargo clippy --features async -- -D warnings && \
+cargo clippy --no-default-features --features sync -- -D warnings && \
+cargo test && \
 cargo test --features sync && \
-cargo test --features async
+cargo test --no-default-features --features sync
 ```
 
 ## Continuous Integration

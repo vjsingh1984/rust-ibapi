@@ -8,8 +8,8 @@ Comprehensive examples demonstrating the rust-ibapi library for Interactive Brok
 # Synchronous examples (70+ available)
 cargo run --features sync --example server_time
 
-# Asynchronous examples (40+ available)  
-cargo run --features async --example connect
+# Asynchronous examples (40+ available, default)
+cargo run --example async_connect
 ```
 
 ## Prerequisites

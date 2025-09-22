@@ -52,7 +52,8 @@ cargo test --features sync   # both features
 2. **Test different configurations**: Test async (default), sync-only, and when relevant, both features enabled
 3. **Follow module structure**: Use the common pattern for shared logic between sync/async
 4. **Minimal comments**: Keep comments concise, avoid stating the obvious
-5. **Run quality checks**: Before committing, run `cargo fmt`, `cargo clippy --features sync`, and `cargo clippy --features async`
+5. **Run quality checks**: Before committing, run `cargo fmt`, `cargo clippy`, `cargo clippy --features sync`, and `cargo clippy --no-default-features --features sync`
+6. **Blocking client location**: When both features are enabled, import sync APIs from `client::blocking` and `subscriptions::blocking`
 
 ## Connection Settings
 
@@ -78,14 +79,18 @@ IBAPI_RECORDING_DIR=/tmp/tws-messages cargo run --example <example_name>
 # Format code
 cargo fmt
 
-# Run clippy (both modes separately)
-cargo clippy --features sync
-cargo clippy --features async
+# Run clippy across configurations
+cargo clippy -- -D warnings
+cargo clippy --features sync -- -D warnings
+cargo clippy --no-default-features --features sync -- -D warnings
 
-# Run all tests
+# Run tests
+cargo test
+cargo test --features sync
+cargo test --no-default-features --features sync
+
+# Or use just recipes
 just test
-
-# Generate coverage report (opens HTML report in browser)
 just cover
 ```
 

@@ -8,42 +8,38 @@ Version 2.x introduces first-class async support! You can now choose between syn
 
 ## Breaking Changes
 
-### 1. Explicit Feature Selection Required
+### 1. Async Is Now the Default
 
-In v2.x, you must explicitly choose between `sync` and `async` features. There is no longer a default feature.
+In v2.x, the crate enables async support by default. You can opt into the blocking implementation by adding the optional `sync` feature.
 
 #### Before (v1.x)
 ```toml
 # Cargo.toml
 [dependencies]
-ibapi = "1.2"  # Only sync was available
+ibapi = "1.2"  # Blocking (sync) only
 ```
 
 #### After (v2.x)
 ```toml
 # Cargo.toml
 [dependencies]
-# For synchronous (blocking) API - same behavior as v1.x:
-ibapi = { version = "2.0", features = ["sync"] }
-
-# OR for the new asynchronous API:
-ibapi = { version = "2.0", features = ["async"] }
+ibapi = "2.0"                                # Async-only (default)
+ibapi = { version = "2.0", features = ["sync"] }   # Async plus blocking client
+ibapi = { version = "2.0", default-features = false, features = ["sync"] }  # Blocking only
 ```
 
 #### Why This Change?
 
-1. **Clarity**: Makes it explicit which execution model you're using
-2. **Smaller binaries**: Only includes the dependencies you actually need  
-3. **Clean separation**: Sync and async are truly independent implementations
-4. **Future flexibility**: Allows for divergent optimizations per mode
+1. **Ergonomics**: Async use-cases work out of the box with `cargo add ibapi`
+2. **Flexibility**: Enable `sync` alongside async when you need both styles in one build
+3. **Smaller binaries**: Sync remains optional and pulls in crossbeam only when requested
+4. **Clear namespacing**: With both features active, the blocking clients live under `client::blocking` and `subscriptions::blocking`
 
-#### Compilation Errors
+#### New Defaults to Keep in Mind
 
-If you upgrade without specifying a feature, you'll see:
-```
-error: Either 'sync' or 'async' feature must be enabled.
-       Use: features = ["sync"] or features = ["async"]
-```
+- `cargo build` or `cargo test` now target the async implementation.
+- Add `--features sync` when you need blocking APIs too.
+- Use `--no-default-features --features sync` for a sync-only build (no async dependencies).
 
 ### 2. New Contract Builder API (v2)
 

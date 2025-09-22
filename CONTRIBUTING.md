@@ -4,11 +4,9 @@ Thank you for your interest in contributing! This guide will help you get starte
 
 ## Important: Feature Flags
 
-**rust-ibapi requires you to choose exactly ONE feature:**
-- `--features sync` - For synchronous, thread-based execution
-- `--features async` - For asynchronous, tokio-based execution
-
-These features are **mutually exclusive**. All commands must specify one.
+- Async support is enabled by default (`cargo build`, `cargo test`).
+- Add `--features sync` to include the blocking API alongside async; sync types are exposed under `client::blocking` and `subscriptions::blocking` in this configuration.
+- For a sync-only build, disable defaults: `cargo build --no-default-features --features sync`.
 
 ## Quick Start
 
@@ -16,17 +14,19 @@ These features are **mutually exclusive**. All commands must specify one.
 2. **Clone** your fork: `git clone https://github.com/<your-username>/rust-ibapi`
 3. **Test** your setup: 
    ```bash
-   cargo test --features sync
-   cargo test --features async
+   cargo test                                   # Async (default)
+   cargo test --features sync                   # Async + sync
+   cargo test --no-default-features --features sync  # Sync-only
    ```
 4. **Make** your changes
-5. **Verify** both modes work:
+5. **Verify** every configuration:
    ```bash
-   cargo test --features sync
-   cargo test --features async
-   cargo clippy --features sync
-   cargo clippy --features async
    cargo fmt
+   cargo clippy --features sync                 # Async + sync lint pass
+   cargo clippy --no-default-features --features sync
+   cargo test
+   cargo test --features sync
+   cargo test --no-default-features --features sync
    ```
 6. **Submit** a pull request
 
@@ -38,9 +38,10 @@ graph TD
     Clone[2. Clone Your Fork]
     Branch[3. Create Feature Branch]
     Code[4. Make Changes]
-    TestSync[5a. Test Sync Mode<br/>cargo test --features sync]
-    TestAsync[5b. Test Async Mode<br/>cargo test --features async]
-    Clippy[6. Run Clippy<br/>Both modes]
+    TestDefault[5a. Test Default<br/>cargo test]
+    TestSync[5b. Test Async + Sync<br/>cargo test --features sync]
+    TestSyncOnly[5c. Test Sync Only<br/>cargo test --no-default-features --features sync]
+    Clippy[6. Run Clippy<br/>All configs]
     Format[7. Format Code<br/>cargo fmt]
     Commit[8. Commit Changes]
     Push[9. Push to Fork]
@@ -52,10 +53,12 @@ graph TD
     Fork --> Clone
     Clone --> Branch
     Branch --> Code
+    Code --> TestDefault
     Code --> TestSync
-    Code --> TestAsync
+    Code --> TestSyncOnly
+    TestDefault --> Clippy
     TestSync --> Clippy
-    TestAsync --> Clippy
+    TestSyncOnly --> Clippy
     Clippy --> Format
     Format --> Commit
     Commit --> Push
@@ -66,8 +69,9 @@ graph TD
     
     style Fork fill:#e3f2fd
     style Merge fill:#c8e6c9
+    style TestDefault fill:#fff9c4
     style TestSync fill:#fff9c4
-    style TestAsync fill:#fff9c4
+    style TestSyncOnly fill:#fff9c4
 ```
 
 ## Table of Contents
@@ -93,11 +97,14 @@ graph TD
 3. Fork and clone the repository
 4. Verify your environment works with both features:
    ```bash
-   # Test sync mode
+   # Test default async mode
+   cargo test
+
+   # Test async + sync
    cargo test --features sync
-   
-   # Test async mode
-   cargo test --features async
+
+   # Test sync-only
+   cargo test --no-default-features --features sync
    ```
 
 ### Recommended IDE Setup
@@ -116,17 +123,19 @@ graph TD
 
 2. Make your changes following our [code style guidelines](docs/code-style.md)
 
-3. Test both feature modes:
+3. Test every configuration:
    ```bash
+   cargo test
    cargo test --features sync
-   cargo test --features async
+   cargo test --no-default-features --features sync
    ```
 
 4. Run quality checks:
    ```bash
    cargo fmt
+   cargo clippy -- -D warnings
    cargo clippy --features sync -- -D warnings
-   cargo clippy --features async -- -D warnings
+   cargo clippy --no-default-features --features sync -- -D warnings
    ```
 
 ### Common Tasks
@@ -140,19 +149,25 @@ graph TD
 
 ### Running Tests
 
-Always test both sync and async modes:
+Always run the full feature matrix:
 
 ```bash
-# Run all tests for both modes
+# Default async
+cargo test
+
+# Async + sync
 cargo test --features sync
-cargo test --features async
+
+# Sync-only
+cargo test --no-default-features --features sync
 
 # Run specific test
+cargo test test_name
 cargo test test_name --features sync
-cargo test test_name --features async
+cargo test test_name --no-default-features --features sync
 
 # Run with output
-cargo test --features sync -- --nocapture
+cargo test -- --nocapture
 
 # Generate coverage report
 cargo tarpaulin -o html --features sync
@@ -184,16 +199,20 @@ The project uses a MockGateway for integration tests:
 
 ### Feature-Specific Code
 
-Since features are mutually exclusive, use simple guards:
+Async ships by default, and the optional `sync` feature can be layered on top. Gate code carefully:
 
 ```rust
-// For sync-only code
+// For code that should only compile when sync is available
 #[cfg(feature = "sync")]
-use std::thread;
+use crate::client::blocking::Client;
 
-// For async-only code
+// For async-only helpers
 #[cfg(feature = "async")]
 use tokio::task;
+
+// For sync-only builds (no async)
+#[cfg(all(feature = "sync", not(feature = "async")))]
+fn blocking_only_helper() { /* ... */ }
 ```
 
 See [Code Style Guidelines](docs/code-style.md) for more details.
@@ -206,8 +225,9 @@ See [Code Style Guidelines](docs/code-style.md) for more details.
 2. **Run quality checks**:
    ```bash
    cargo fmt --check
+   cargo clippy
    cargo clippy --features sync -- -D warnings
-   cargo clippy --features async -- -D warnings
+   cargo clippy --no-default-features --features sync -- -D warnings
    ```
 3. **Update documentation** if needed
 4. **Add tests** for new functionality
@@ -307,9 +327,9 @@ IBAPI_RECORDING_DIR=/tmp/tws-messages cargo run --features sync --example exampl
 
 ### Common Issues
 
-- **"no feature specified"** - Add `--features sync` or `--features async`
-- **"mutually exclusive features"** - Use only one feature flag
-- **Tests failing** - Ensure you're testing with the correct feature flag
+- **"unresolved import `client::blocking`"** - Add the `sync` feature
+- **"missing crate `tokio`"** - Re-enable default features or add `--features async`
+- **Tests failing** - Re-run the full matrix: default, `--features sync`, and `--no-default-features --features sync`
 - **Clippy warnings** - Run clippy for both features separately
 
 For detailed solutions, see the [Troubleshooting Guide](docs/troubleshooting.md).

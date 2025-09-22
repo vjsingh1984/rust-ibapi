@@ -17,20 +17,23 @@ Before you begin, ensure you have:
 graph LR
     Choice{Your Application Type?}
     Sync[--features sync<br/>Traditional threads]
-    Async[--features async<br/>Tokio async/await]
-    
-    Choice -->|Simple/Traditional| Sync
-    Choice -->|High Performance/Modern| Async
-    
+    AsyncDefault[Async (default)]
+    AsyncSync[Async + Sync\\n(--features sync)]
+    SyncOnly[Sync only\\n(--no-default-features --features sync)]
+
+    Choice -->|Do nothing| AsyncDefault
+    Choice -->|Need blocking API too| AsyncSync
+    Choice -->|Minimal blocking build| SyncOnly
+
     style Choice fill:#fff3e0
-    style Sync fill:#e8f5e9
-    style Async fill:#e3f2fd
+    style AsyncDefault fill:#e3f2fd
+    style AsyncSync fill:#c8e6c9
+    style SyncOnly fill:#ffe0b2
 ```
 
-- **`--features sync`** - Traditional synchronous execution using threads
-- **`--features async`** - Modern asynchronous execution using tokio
-
-These are **mutually exclusive** - you cannot use both.
+- **Default (`cargo build`)** - Modern async execution using tokio
+- **`--features sync`** - Adds the blocking API (available via `client::blocking`)
+- **`--no-default-features --features sync`** - Blocking build without async dependencies
 
 ## Installation
 
@@ -40,10 +43,9 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-# Choose ONE:
-ibapi = { version = "2.0", features = ["sync"] }
-# OR
-ibapi = { version = "2.0", features = ["async"] }
+ibapi = "2.0"                                # Async-only (default)
+ibapi = { version = "2.0", features = ["sync"] }   # Async + sync
+ibapi = { version = "2.0", default-features = false, features = ["sync"] }  # Sync-only
 ```
 
 ### For Development
@@ -53,10 +55,10 @@ ibapi = { version = "2.0", features = ["async"] }
 git clone https://github.com/wboayue/rust-ibapi.git
 cd rust-ibapi
 
-# Verify installation (choose ONE feature)
-cargo build --features sync
-# OR
-cargo build --features async
+# Verify installation
+cargo build                                   # Async (default)
+cargo build --features sync                    # Async + sync
+cargo build --no-default-features --features sync  # Sync-only
 ```
 
 ## Your First Example
@@ -77,7 +79,7 @@ Ensure your IB Gateway or TWS is running with API connections enabled:
 Create `src/main.rs`:
 
 ```rust
-use ibapi::Client;
+use ibapi::client::blocking::Client;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Connect to IB Gateway Paper Trading
@@ -100,6 +102,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 Run with:
 ```bash
 cargo run --features sync
+# or for a sync-only build
+cargo run --no-default-features --features sync
 ```
 
 #### Async Version
@@ -130,7 +134,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 Run with:
 ```bash
-cargo run --features async
+cargo run
 ```
 
 ## Common Operations
@@ -211,7 +215,7 @@ ls examples/
 cargo run --features sync --example account_summary
 
 # Run an async example  
-cargo run --features async --example async_account_summary
+cargo run --example async_account_summary
 
 # Run with debug logging
 RUST_LOG=debug cargo run --features sync --example market_data
@@ -227,23 +231,17 @@ RUST_LOG=debug cargo run --features sync --example market_data
 | `historical_data` | Fetch historical bars | `cargo run --features sync --example historical_data` |
 | `contract_details` | Get contract information | `cargo run --features sync --example contract_details` |
 
-For async versions, use `--features async` and prefix the example name with `async_`.
+Async examples run without additional flags. Use commands like `cargo run --example async_market_data` to explore the default async API.
 
 ## Troubleshooting
 
 ### Common Issues and Solutions
 
-#### "No feature specified" Error
-```bash
-error: no feature specified. Enable either 'sync' or 'async' feature
+#### "cannot find module `client::blocking`" Error
+```text
+error[E0432]: unresolved import `ibapi::client::blocking`
 ```
-**Solution**: Add `--features sync` or `--features async` to your command.
-
-#### "Mutually exclusive features" Error
-```bash
-error: features 'sync' and 'async' are mutually exclusive
-```
-**Solution**: Use only one feature flag, not both.
+**Solution**: Add the `sync` feature (`cargo build --features sync`) or disable defaults and enable `sync` for a sync-only build.
 
 #### Connection Refused
 ```bash
@@ -311,19 +309,26 @@ Now that you're up and running:
 
 ```bash
 # Build
-cargo build --features sync      # or --features async
+cargo build
+cargo build --features sync
+cargo build --no-default-features --features sync
 
 # Test
-cargo test --features sync       # or --features async
+cargo test
+cargo test --features sync
+cargo test --no-default-features --features sync
 
 # Run example
-cargo run --features sync --example example_name
+cargo run --example async_connect
+cargo run --features sync --example orders
 
 # Generate docs
-cargo doc --open --features sync
+cargo doc --open
 
 # Check code
+cargo clippy -- -D warnings
 cargo clippy --features sync -- -D warnings
+cargo clippy --no-default-features --features sync -- -D warnings
 cargo fmt --check
 ```
 

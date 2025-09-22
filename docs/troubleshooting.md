@@ -4,36 +4,33 @@ Common issues and solutions when using rust-ibapi.
 
 ## Build & Compilation Issues
 
-### No Feature Specified
+### Missing Sync Types
 
 **Error:**
 ```
-error: no feature specified. Enable either 'sync' or 'async' feature
+error[E0432]: unresolved import `ibapi::client::blocking`
 ```
 
 **Solution:**
-You must specify exactly one feature flag:
+Enable the `sync` feature when you need blocking helpers:
 ```bash
 cargo build --features sync
-# OR
+cargo build --no-default-features --features sync
+```
+
+### Async Types Not Found
+
+**Error:**
+```
+error[E0433]: failed to resolve: maybe a missing crate `tokio`
+```
+
+**Solution:**
+Async support is included by default. This error usually appears after building with `--no-default-features`; re-enable async:
+```bash
+cargo build                      # Async enabled by default
+# or specify explicitly when defaults were disabled
 cargo build --features async
-```
-
-### Mutually Exclusive Features
-
-**Error:**
-```
-error: features 'sync' and 'async' are mutually exclusive
-```
-
-**Solution:**
-Use only one feature flag, not both:
-```bash
-# Wrong
-cargo build --features "sync async"
-
-# Correct - choose one
-cargo build --features sync
 ```
 
 ## Connection Issues
@@ -225,11 +222,13 @@ match client.place_order(order_id, &contract, &order) {
 
 **Solution:**
 ```bash
-# Always test both modes locally before pushing
+# Always exercise every configuration locally before pushing
+cargo test
 cargo test --features sync
-cargo test --features async
-cargo clippy --features sync
-cargo clippy --features async
+cargo test --no-default-features --features sync
+cargo clippy -- -D warnings
+cargo clippy --features sync -- -D warnings
+cargo clippy --no-default-features --features sync -- -D warnings
 ```
 
 ### MockGateway Tests Failing

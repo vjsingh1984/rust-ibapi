@@ -1,142 +1,104 @@
 # Feature Flags
 
-The library requires you to explicitly choose one of two mutually exclusive features.
+rust-ibapi enables async support by default. Add the optional `sync` feature when you need the blocking API, or disable defaults to build a sync-only crate.
 
 ## Feature Selection Flow
 
 ```mermaid
 graph TD
     Start[cargo build/test/run]
-    Check{Feature specified?}
-    CheckWhich{Which feature?}
-    CheckBoth{Both specified?}
-    Sync[Build with Sync Mode]
-    Async[Build with Async Mode]
-    Error1[❌ Error: No feature specified<br/>Must use --features sync<br/>OR --features async]
-    Error2[❌ Error: Mutually exclusive<br/>Cannot use both features]
-    
-    Start --> Check
-    Check -->|No| Error1
-    Check -->|Yes| CheckBoth
-    CheckBoth -->|Yes| Error2
-    CheckBoth -->|No| CheckWhich
-    CheckWhich -->|--features sync| Sync
-    CheckWhich -->|--features async| Async
-    
-    Sync --> Success1[✓ Thread-based execution]
-    Async --> Success2[✓ Tokio-based execution]
-    
-    style Error1 fill:#ffcdd2
-    style Error2 fill:#ffcdd2
-    style Success1 fill:#c8e6c9
-    style Success2 fill:#c8e6c9
+    Default[Async (default)]
+    Both[Async + Sync\n(--features sync)]
+    SyncOnly[Sync only\n(--no-default-features --features sync)]
+
+    Start --> Default
+    Default -->|Add --features sync| Both
+    Default -->|Disable defaults + sync| SyncOnly
+
+    style Default fill:#e3f2fd
+    style Both fill:#c8e6c9
+    style SyncOnly fill:#ffe0b2
 ```
 
 ## Available Features
 
-- **`sync`**: Traditional synchronous API using threads and crossbeam channels
-- **`async`**: Asynchronous API using tokio and async/await
+- **`async`** *(default)*: Tokio-based, non-blocking implementation
+- **`sync`** *(optional)*: Thread-based implementation using crossbeam channels
 
-There is no default feature. You must specify exactly one:
-
-```bash
-# For sync mode
-cargo build --features sync
-
-# For async mode
-cargo build --features async
-```
-
-If you don't specify a feature, you'll get a helpful compile error explaining how to use the crate.
+When both features are enabled, async types remain the primary exports and the blocking equivalents are available under `client::blocking` and `subscriptions::blocking`.
 
 ## Feature Guard Pattern
 
-Since the features are mutually exclusive, you can use simple feature guards:
+Use standard feature guards, but remember that both features can be active simultaneously:
 
 ```rust
 #[cfg(feature = "sync")]
-use std::thread;
+use crate::client::blocking::Client as BlockingClient;
 
 #[cfg(feature = "async")]
-use tokio::task;
+use crate::Client; // Async client
 ```
 
-The crate enforces that exactly one feature is enabled at compile time.
+If you need code that behaves differently when *only* one mode is present, gate with `#[cfg(all(feature = "sync", not(feature = "async")))]` and similar patterns.
 
-## Module Organization for Features
+## Module Organization Pattern
 
-Each module follows this pattern to support both modes:
+Modules keep shared types at the top level, add mode-specific implementations, and expose blocking APIs behind a nested namespace when both features are active:
 
 ```rust
-// mod.rs - Public types (always available)
-pub struct MyType { ... }
+pub struct MyType { /* shared */ }
 
-// Feature-specific implementations
 #[cfg(feature = "sync")]
 mod sync;
 
 #[cfg(feature = "async")]
 mod r#async;
 
-// Re-export the appropriate implementation
-#[cfg(feature = "sync")]
-pub use sync::my_function;
-
 #[cfg(feature = "async")]
-pub use r#async::my_function;
+pub use r#async::my_async_fn;
+
+#[cfg(feature = "sync")]
+pub(crate) use sync::my_sync_fn;
+
+#[cfg(feature = "sync")]
+pub mod blocking {
+    pub use super::sync::my_sync_fn;
+}
 ```
 
 ## Usage in Cargo.toml
 
-### For library users:
 ```toml
-# Choose one:
+# Async-only (default)
+ibapi = "2.0"
+
+# Async + sync
 ibapi = { version = "2.0", features = ["sync"] }
-# OR
-ibapi = { version = "2.0", features = ["async"] }
+
+# Sync-only
+ibapi = { version = "2.0", default-features = false, features = ["sync"] }
 ```
 
-### For examples:
-```toml
-[[example]]
-name = "async_market_data"
-path = "examples/async/market_data.rs"
-required-features = ["async"]
-
-[[example]]
-name = "market_data"
-path = "examples/sync/market_data.rs"
-required-features = ["sync"]
-```
-
-## Testing with Features
-
-Always test both feature flags:
+## Testing With Features
 
 ```bash
-# Test sync implementation
-cargo test --features sync
-
-# Test async implementation
-cargo test --features async
-
-# Run specific test for both
-cargo test test_name --features sync
-cargo test test_name --features async
+cargo test                                   # Async (default)
+cargo test --features sync                   # Async + sync
+cargo test --no-default-features --features sync  # Sync-only
 ```
+
+Run the same matrix for `cargo clippy` to keep both implementations lint-clean.
 
 ## Key Differences
 
-### Sync Mode
-- Uses `std::thread` for concurrency
-- Crossbeam channels for communication
-- Blocking I/O operations
-- Returns `Result<T, Error>`
-- Subscriptions implement `Iterator`
-
 ### Async Mode
-- Uses `tokio` runtime
-- `tokio::sync` primitives
-- Non-blocking I/O with `.await`
-- Returns `Result<T, Error>` (with `.await`)
-- Subscriptions implement `Stream`
+- Uses the tokio runtime and async/await
+- `Subscription` implements `Stream`
+- Message dispatch handled via async channels
+
+### Sync Mode
+- Uses threads and crossbeam channels
+- `subscriptions::blocking::Subscription` implements `Iterator`
+- Blocking helpers exposed through `client::blocking`
+
+Pick the combination that matches your deployment: default async for new integrations, add `sync` when you need existing blocking workflows, or disable defaults for minimal sync-only builds.

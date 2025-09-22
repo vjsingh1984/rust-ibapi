@@ -8,14 +8,16 @@ This document describes the testing patterns and infrastructure used in the rust
 graph LR
     Change[Code Change]
     
-    subgraph "Test Both Modes"
+    subgraph "Test Matrix"
+        TestDefault[cargo test]
         TestSync[cargo test<br/>--features sync]
-        TestAsync[cargo test<br/>--features async]
+        TestSyncOnly[cargo test<br/>--no-default-features --features sync]
     end
     
     subgraph "Quality Checks"
+        ClippyDefault[cargo clippy]
         ClippySync[cargo clippy<br/>--features sync]
-        ClippyAsync[cargo clippy<br/>--features async]
+        ClippySyncOnly[cargo clippy<br/>--no-default-features --features sync]
         Format[cargo fmt]
     end
     
@@ -25,20 +27,25 @@ graph LR
         Mock[MockGateway Tests<br/>Protocol verification]
     end
     
+    Change --> TestDefault
     Change --> TestSync
-    Change --> TestAsync
+    Change --> TestSyncOnly
+    TestDefault --> ClippyDefault
     TestSync --> ClippySync
-    TestAsync --> ClippyAsync
+    TestSyncOnly --> ClippySyncOnly
+    ClippyDefault --> Format
     ClippySync --> Format
-    ClippyAsync --> Format
+    ClippySyncOnly --> Format
     
+    TestDefault --> Unit
+    TestDefault --> Integration
+    TestDefault --> Mock
     TestSync --> Unit
     TestSync --> Integration
     TestSync --> Mock
-    
-    TestAsync --> Unit
-    TestAsync --> Integration
-    TestAsync --> Mock
+    TestSyncOnly --> Unit
+    TestSyncOnly --> Integration
+    TestSyncOnly --> Mock
     
     Format --> PR[Pull Request ✓]
     
@@ -190,14 +197,19 @@ The crate uses standard Rust unit testing patterns with `#[test]` for sync code 
 ### Running Tests
 
 ```bash
-# Run all sync tests
+# Default async tests
+cargo test
+
+# Async + sync tests
 cargo test --features sync
 
-# Run all async tests  
-cargo test --features async
+# Sync-only tests
+cargo test --no-default-features --features sync
 
 # Run specific test module
-cargo test --features sync client::sync::tests
+cargo test client::tests::your_module
+cargo test --features sync client::tests::your_module
+cargo test --no-default-features --features sync client::tests::your_module
 
 # Run with logging
 RUST_LOG=debug cargo test --features sync
