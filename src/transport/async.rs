@@ -21,6 +21,7 @@ pub enum CleanupSignal {
     Request(i32),
     Order(i32),
     Shared(OutgoingMessages),
+    OrderUpdateStream,
 }
 
 use crate::connection::r#async::AsyncConnection;
@@ -229,6 +230,7 @@ impl AsyncTcpMessageBus {
         // Start cleanup task
         let request_channels = message_bus.request_channels.clone();
         let order_channels = message_bus.order_channels.clone();
+        let order_update_stream = message_bus.order_update_stream.clone();
 
         task::spawn(async move {
             let mut receiver = cleanup_receiver;
@@ -248,6 +250,11 @@ impl AsyncTcpMessageBus {
                         // Shared channels are persistent and should not be removed
                         // They are created at initialization and reused across multiple requests
                         debug!("Subscription for shared channel {:?} ended (channel remains active)", message_type);
+                    }
+                    CleanupSignal::OrderUpdateStream => {
+                        let mut stream = order_update_stream.write().await;
+                        *stream = None;
+                        debug!("Cleaned up order update stream ownership");
                     }
                 }
             }
@@ -765,7 +772,11 @@ impl AsyncMessageBus for AsyncTcpMessageBus {
 
         *order_update_stream = Some(sender);
 
-        Ok(AsyncInternalSubscription::new(receiver))
+        Ok(AsyncInternalSubscription::with_cleanup(
+            receiver,
+            self.cleanup_sender.clone(),
+            CleanupSignal::OrderUpdateStream,
+        ))
     }
 
     async fn ensure_shutdown(&self) {
