@@ -1,10 +1,13 @@
 use std::sync::RwLock;
 
-#[cfg(feature = "sync")]
+#[cfg(any(feature = "sync", feature = "async"))]
 use std::{
     collections::HashSet,
-    sync::{Arc, LazyLock, Mutex},
+    sync::{LazyLock, Mutex},
 };
+
+#[cfg(feature = "sync")]
+use std::sync::Arc;
 
 #[cfg(feature = "sync")]
 use crossbeam::channel;
@@ -17,7 +20,10 @@ use crate::transport::{InternalSubscription, MessageBus, SubscriptionBuilder};
 
 #[cfg(feature = "async")]
 use {
-    crate::transport::{r#async::AsyncInternalSubscription, AsyncMessageBus},
+    crate::transport::{
+        r#async::{AsyncInternalSubscription, CleanupSignal},
+        AsyncMessageBus,
+    },
     async_trait::async_trait,
     tokio::sync::broadcast,
 };
@@ -34,7 +40,7 @@ pub(crate) struct MessageBusStub {
 }
 
 // Separate tracking for order update subscriptions to maintain backward compatibility
-#[cfg(feature = "sync")]
+#[cfg(any(feature = "sync", feature = "async"))]
 static ORDER_UPDATE_SUBSCRIPTION_TRACKER: LazyLock<Mutex<HashSet<usize>>> = LazyLock::new(|| Mutex::new(HashSet::new()));
 
 impl Default for MessageBusStub {
@@ -46,7 +52,7 @@ impl Default for MessageBusStub {
     }
 }
 
-#[cfg(feature = "sync")]
+#[cfg(any(feature = "sync", feature = "async"))]
 impl Drop for MessageBusStub {
     fn drop(&mut self) {
         // Clean up the subscription tracker to prevent test isolation issues
@@ -229,6 +235,13 @@ impl AsyncMessageBus for MessageBusStub {
     }
 
     async fn create_order_update_subscription(&self) -> Result<AsyncInternalSubscription, Error> {
+        let stub_id = self as *const _ as usize;
+        let mut tracker = ORDER_UPDATE_SUBSCRIPTION_TRACKER.lock().unwrap();
+        if !tracker.insert(stub_id) {
+            return Err(Error::AlreadySubscribed);
+        }
+        drop(tracker);
+
         let (sender, receiver) = broadcast::channel(TEST_BROADCAST_CAPACITY);
 
         // Send pre-configured response messages
@@ -237,7 +250,21 @@ impl AsyncMessageBus for MessageBusStub {
             sender.send(message).unwrap();
         }
 
-        Ok(AsyncInternalSubscription::new(receiver))
+        let (cleanup_sender, mut cleanup_receiver) = tokio::sync::mpsc::unbounded_channel();
+        tokio::spawn(async move {
+            while let Some(signal) = cleanup_receiver.recv().await {
+                if matches!(signal, CleanupSignal::OrderUpdateStream) {
+                    ORDER_UPDATE_SUBSCRIPTION_TRACKER.lock().unwrap().remove(&stub_id);
+                    break;
+                }
+            }
+        });
+
+        Ok(AsyncInternalSubscription::with_cleanup(
+            receiver,
+            cleanup_sender,
+            CleanupSignal::OrderUpdateStream,
+        ))
     }
 
     async fn ensure_shutdown(&self) {

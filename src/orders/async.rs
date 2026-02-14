@@ -380,6 +380,7 @@ mod tests {
     // use crate::testdata::responses;  // No order responses defined yet
     use crate::{server_versions, Client};
     use std::sync::{Arc, RwLock};
+    use tokio::time::Duration;
 
     #[tokio::test]
     async fn test_place_order() {
@@ -720,6 +721,53 @@ mod tests {
         // Test that we can receive CommissionReport
         let update = stream.next().await.unwrap().unwrap();
         assert!(matches!(update, OrderUpdate::CommissionReport(_)));
+    }
+
+    #[tokio::test]
+    async fn test_order_update_stream_already_subscribed() {
+        let message_bus = Arc::new(MessageBusStub {
+            request_messages: RwLock::new(vec![]),
+            response_messages: vec![],
+        });
+        let client = Client::stubbed(message_bus, server_versions::SIZE_RULES);
+
+        let stream1 = order_update_stream(&client).await;
+        assert!(stream1.is_ok(), "failed to create first order update stream");
+
+        let stream2 = order_update_stream(&client).await;
+        assert!(stream2.is_err(), "second order update stream should fail with AlreadySubscribed");
+        assert!(
+            matches!(stream2.err().unwrap(), Error::AlreadySubscribed),
+            "expected AlreadySubscribed error"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_order_update_stream_drop_releases_subscription() {
+        let message_bus = Arc::new(MessageBusStub {
+            request_messages: RwLock::new(vec![]),
+            response_messages: vec![],
+        });
+        let client = Client::stubbed(message_bus, server_versions::SIZE_RULES);
+
+        let stream1 = order_update_stream(&client).await.expect("failed to create initial order update stream");
+        drop(stream1);
+
+        let mut recovered = None;
+        for _ in 0..25 {
+            match order_update_stream(&client).await {
+                Ok(stream) => {
+                    recovered = Some(stream);
+                    break;
+                }
+                Err(Error::AlreadySubscribed) => {
+                    tokio::time::sleep(Duration::from_millis(20)).await;
+                }
+                Err(err) => panic!("unexpected error while re-subscribing: {err:?}"),
+            }
+        }
+
+        assert!(recovered.is_some(), "order update stream should be re-subscribable after drop");
     }
 
     #[tokio::test]
