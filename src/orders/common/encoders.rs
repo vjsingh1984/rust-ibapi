@@ -383,6 +383,31 @@ pub(crate) fn encode_place_order(server_version: i32, order_id: i32, contract: &
         }
     }
 
+    if server_version >= server_versions::CUSTOMER_ACCOUNT {
+        message.push_field(&order.customer_account);
+    }
+
+    if server_version >= server_versions::PROFESSIONAL_CUSTOMER {
+        message.push_field(&order.professional_customer);
+    }
+
+    if (server_versions::RFQ_FIELDS..server_versions::UNDO_RFQ_FIELDS).contains(&server_version) {
+        message.push_field(&"");
+        message.push_field(&i32::MAX);
+    }
+
+    if server_version >= server_versions::INCLUDE_OVERNIGHT {
+        message.push_field(&order.include_overnight);
+    }
+
+    if server_version >= server_versions::CME_TAGGING_FIELDS {
+        message.push_field(&order.manual_order_indicator);
+    }
+
+    if server_version >= server_versions::IMBALANCE_ONLY {
+        message.push_field(&order.imbalance_only);
+    }
+
     Ok(message)
 }
 
@@ -891,5 +916,89 @@ pub(crate) mod tests {
         assert_eq!(field_vec[12], "20260125"); // specific_dates[0]
         assert_eq!(field_vec[13], "20260126"); // specific_dates[1]
         assert_eq!(field_vec.len(), 15); // 14 fields + trailing empty
+    }
+
+    #[test]
+    fn test_encode_place_order_v200_new_fields() {
+        let contract = Contract::stock("AAPL").build();
+        let order = Order {
+            action: crate::orders::Action::Buy,
+            total_quantity: 100.0,
+            order_type: "LMT".to_string(),
+            limit_price: Some(150.50),
+            customer_account: "CUST001".to_string(),
+            professional_customer: true,
+            include_overnight: true,
+            manual_order_indicator: Some(3),
+            imbalance_only: true,
+            ..Default::default()
+        };
+
+        let result = encode_place_order(200, 42, &contract, &order).unwrap();
+        let fields = result.encode();
+        let field_vec: Vec<&str> = fields.split('\0').collect();
+
+        // Verify the last fields contain the new v183-v199 fields.
+        // Work backward from end: trailing empty, then imbalance_only, manual_order_indicator,
+        // include_overnight, (no RFQ at v200), professional_customer, customer_account
+        let len = field_vec.len();
+        assert_eq!(field_vec[len - 2], "1", "imbalance_only");
+        assert_eq!(field_vec[len - 3], "3", "manual_order_indicator");
+        assert_eq!(field_vec[len - 4], "1", "include_overnight");
+        // No RFQ fields at v200 (>= UNDO_RFQ_FIELDS=190)
+        assert_eq!(field_vec[len - 5], "1", "professional_customer");
+        assert_eq!(field_vec[len - 6], "CUST001", "customer_account");
+    }
+
+    #[test]
+    fn test_encode_place_order_v188_rfq_fields() {
+        let contract = Contract::stock("AAPL").build();
+        let order = Order {
+            action: crate::orders::Action::Buy,
+            total_quantity: 100.0,
+            order_type: "LMT".to_string(),
+            customer_account: "CUST001".to_string(),
+            professional_customer: true,
+            ..Default::default()
+        };
+
+        // v188 is in range [RFQ_FIELDS=187, UNDO_RFQ_FIELDS=190)
+        let result = encode_place_order(188, 42, &contract, &order).unwrap();
+        let fields = result.encode();
+        let field_vec: Vec<&str> = fields.split('\0').collect();
+
+        // Last fields: customer_account, professional_customer, RFQ empty, RFQ max_int
+        // No include_overnight (v188 < 189), no manual_order_indicator (< 192), no imbalance_only (< 199)
+        let len = field_vec.len();
+        assert_eq!(field_vec[len - 2], "2147483647", "RFQ max int");
+        assert_eq!(field_vec[len - 3], "", "RFQ empty string");
+        assert_eq!(field_vec[len - 4], "1", "professional_customer");
+        assert_eq!(field_vec[len - 5], "CUST001", "customer_account");
+    }
+
+    #[test]
+    fn test_encode_place_order_v191_no_rfq_fields() {
+        let contract = Contract::stock("AAPL").build();
+        let order = Order {
+            action: crate::orders::Action::Buy,
+            total_quantity: 100.0,
+            order_type: "LMT".to_string(),
+            customer_account: "CUST001".to_string(),
+            professional_customer: true,
+            include_overnight: true,
+            ..Default::default()
+        };
+
+        // v191 >= UNDO_RFQ_FIELDS=190 (no RFQ), >= INCLUDE_OVERNIGHT=189, < CME_TAGGING_FIELDS=192
+        let result = encode_place_order(191, 42, &contract, &order).unwrap();
+        let fields = result.encode();
+        let field_vec: Vec<&str> = fields.split('\0').collect();
+
+        // Last fields: customer_account, professional_customer, include_overnight
+        // No RFQ (v191 >= 190), no manual_order_indicator (< 192), no imbalance_only (< 199)
+        let len = field_vec.len();
+        assert_eq!(field_vec[len - 2], "1", "include_overnight");
+        assert_eq!(field_vec[len - 3], "1", "professional_customer");
+        assert_eq!(field_vec[len - 4], "CUST001", "customer_account");
     }
 }
