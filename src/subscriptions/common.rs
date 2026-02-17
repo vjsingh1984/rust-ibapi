@@ -30,11 +30,14 @@ pub(crate) fn check_retry(retry_count: usize) -> RetryDecision {
     }
 }
 
-/// Checks if an error indicates the subscription should retry processing
+/// Checks if an error indicates the subscription should retry processing.
+/// `UnexpectedResponse` on shared channels is a skip (wrong-channel message),
+/// not a true retry, but the sync subscription uses this to recurse.
 #[allow(dead_code)]
 pub(crate) fn should_retry_error(error: &Error) -> bool {
     matches!(error, Error::UnexpectedResponse(_))
 }
+
 
 /// Checks if an error indicates the end of a stream
 #[allow(dead_code)]
@@ -53,8 +56,15 @@ pub(crate) fn should_store_error(error: &Error) -> bool {
 pub(crate) enum ProcessingResult<T> {
     /// Successfully processed a value
     Success(T),
-    /// Encountered an error that should be retried
+    /// Encountered an error that should be retried (counted toward max retries).
+    /// Currently unused — `UnexpectedResponse` maps to `Skip` instead — but
+    /// retained for future error types that warrant counted retries.
+    #[allow(dead_code)]
     Retry,
+    /// Message not intended for this subscription — skip without counting as a retry.
+    /// This happens on shared broadcast channels where messages from other
+    /// subscriptions or asynchronous updates can arrive on the same channel.
+    Skip,
     /// Encountered an error that should be stored
     Error(Error),
     /// Stream has ended normally
@@ -66,7 +76,7 @@ pub(crate) fn process_decode_result<T>(result: Result<T, Error>) -> ProcessingRe
     match result {
         Ok(val) => ProcessingResult::Success(val),
         Err(Error::EndOfStream) => ProcessingResult::EndOfStream,
-        Err(Error::UnexpectedResponse(_)) => ProcessingResult::Retry,
+        Err(Error::UnexpectedResponse(_)) => ProcessingResult::Skip,
         Err(err) => ProcessingResult::Error(err),
     }
 }
@@ -126,11 +136,11 @@ mod tests {
             _ => panic!("Expected EndOfStream"),
         }
 
-        // Test retry case
+        // Test skip case (wrong-channel message)
         let test_msg = ResponseMessage::from_simple("test");
         match process_decode_result::<i32>(Err(Error::UnexpectedResponse(test_msg))) {
-            ProcessingResult::Retry => {}
-            _ => panic!("Expected Retry"),
+            ProcessingResult::Skip => {}
+            _ => panic!("Expected Skip"),
         }
 
         // Test error case

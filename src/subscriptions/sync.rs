@@ -143,13 +143,10 @@ impl<T: StreamDecoder<T>> Subscription<T> {
             }
             None => match self.error() {
                 Some(ref err) if should_retry_error(err) => {
-                    let retries = self.retry_count.fetch_add(1, Ordering::Relaxed);
-                    if check_retry(retries) == RetryDecision::Continue {
-                        self.next()
-                    } else {
-                        self.retry_count.store(0, Ordering::Relaxed);
-                        None
-                    }
+                    // Wrong-channel message on shared broadcast — skip silently
+                    // without counting toward the retry limit.
+                    log::trace!("skipping unexpected message on shared channel");
+                    self.next()
                 }
                 _ => {
                     self.retry_count.store(0, Ordering::Relaxed);
@@ -204,6 +201,10 @@ impl<T: StreamDecoder<T>> Subscription<T> {
             }
             ProcessingResult::EndOfStream => {
                 self.stream_ended.store(true, Ordering::Relaxed);
+                None
+            }
+            ProcessingResult::Skip => {
+                // Wrong-channel message — handled at the next() level by recursing
                 None
             }
             ProcessingResult::Retry => {

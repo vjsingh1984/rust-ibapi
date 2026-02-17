@@ -220,6 +220,12 @@ impl<T> Subscription<T> {
                                     self.stream_ended.store(true, Ordering::Relaxed);
                                     return None;
                                 }
+                                ProcessingResult::Skip => {
+                                    // Message not for this subscription (wrong channel).
+                                    // Silently discard without counting toward retry limit.
+                                    log::trace!("skipping unexpected message on shared channel");
+                                    continue;
+                                }
                                 ProcessingResult::Retry => {
                                     if check_retry(retry_count) == RetryDecision::Stop {
                                         return None;
@@ -502,6 +508,47 @@ mod tests {
 
         // Decoder should have been called only once (for the EndOfStream message)
         assert_eq!(call_count.load(std::sync::atomic::Ordering::Relaxed), 1);
+    }
+
+    #[tokio::test]
+    async fn test_subscription_skips_unexpected_messages_without_retry_limit() {
+        let message_bus = Arc::new(MessageBusStub::default());
+        let (tx, rx) = broadcast::channel(100);
+        let internal = AsyncInternalSubscription::new(rx);
+
+        let call_count = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let call_count_clone = call_count.clone();
+
+        // Decoder: returns UnexpectedResponse for the first 20 messages (more than
+        // MAX_DECODE_RETRIES=10), then returns a success value. If UnexpectedResponse
+        // counted toward the retry limit, the subscription would give up after 10.
+        let mut subscription: Subscription<String> = Subscription::with_decoder(
+            internal,
+            message_bus,
+            move |_context, _msg| {
+                let n = call_count_clone.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                if n < 20 {
+                    Err(Error::UnexpectedResponse(ResponseMessage::from("stray\0")))
+                } else {
+                    Ok("success".to_string())
+                }
+            },
+            None,
+            None,
+            None,
+            DecoderContext::default(),
+        );
+
+        // Send 21 messages — 20 will be "unexpected" (skipped), 1 will succeed
+        for _ in 0..21 {
+            tx.send(ResponseMessage::from("msg\0")).unwrap();
+        }
+
+        let result = subscription.next().await;
+        assert!(result.is_some(), "subscription should not have stopped after skipping unexpected messages");
+        assert_eq!(result.unwrap().unwrap(), "success");
+        // All 21 messages should have been processed (20 skipped + 1 success)
+        assert_eq!(call_count.load(std::sync::atomic::Ordering::Relaxed), 21);
     }
 
     #[tokio::test]
