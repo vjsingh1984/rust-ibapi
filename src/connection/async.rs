@@ -1,5 +1,7 @@
 //! Asynchronous connection implementation
 
+use std::sync::atomic::{AtomicI32, Ordering};
+
 use log::{debug, info};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::tcp::{OwnedReadHalf, OwnedWriteHalf};
@@ -24,6 +26,7 @@ pub struct AsyncConnection {
     pub(crate) reader: Mutex<OwnedReadHalf>,
     pub(crate) writer: Mutex<OwnedWriteHalf>,
     pub(crate) connection_metadata: Mutex<ConnectionMetadata>,
+    pub(crate) server_version_cache: AtomicI32,
     pub(crate) recorder: MessageRecorder,
     pub(crate) connection_handler: ConnectionHandler,
     pub(crate) connection_url: String,
@@ -61,6 +64,7 @@ impl AsyncConnection {
                 client_id,
                 ..Default::default()
             }),
+            server_version_cache: AtomicI32::new(0),
             recorder: MessageRecorder::from_env(),
             connection_handler: ConnectionHandler::default(),
             connection_url: address.to_string(),
@@ -80,23 +84,15 @@ impl AsyncConnection {
     }
 
     /// Get a copy of the connection metadata
-    pub fn connection_metadata(&self) -> ConnectionMetadata {
-        // For now, we'll use blocking lock since this is called during initialization
-        // In a more complete implementation, this would be async
-        futures::executor::block_on(async {
-            let metadata = self.connection_metadata.lock().await;
-            metadata.clone()
-        })
+    pub async fn connection_metadata(&self) -> ConnectionMetadata {
+        let mut metadata = self.connection_metadata.lock().await.clone();
+        metadata.server_version = self.server_version_cache.load(Ordering::Acquire);
+        metadata
     }
 
-    /// Get the server version
+    /// Get the server version (lock-free; cached after handshake)
     pub(crate) fn server_version(&self) -> i32 {
-        // For now, we'll use blocking lock since this is called during initialization
-        // In a more complete implementation, this would be async
-        futures::executor::block_on(async {
-            let connection_metadata = self.connection_metadata.lock().await;
-            connection_metadata.server_version
-        })
+        self.server_version_cache.load(Ordering::Acquire)
     }
 
     /// Reconnect to TWS with fibonacci backoff
@@ -218,7 +214,7 @@ impl AsyncConnection {
         match ack {
             Ok(mut response) => {
                 let handshake_data = self.connection_handler.parse_handshake_response(&mut response)?;
-                connection_metadata.server_version = handshake_data.server_version;
+                self.server_version_cache.store(handshake_data.server_version, Ordering::Release);
 
                 let (time, tz) = parse_connection_time(&handshake_data.server_time);
                 connection_metadata.connection_time = time;

@@ -57,6 +57,7 @@ cargo test --all-features
 7. **Don't repeat code**: Extract repeated logic to `common/`; use shared helpers like `request_helpers`
 8. **Single responsibility**: One responsibility per function/module; split orchestration from business logic
 9. **Composition**: Single responsibility per struct; use builders for complex construction; max 3 params per function (use builder if 4+)
+10. **Never use `block_on` in async code**: Do not use `futures::executor::block_on()` inside async contexts — it blocks tokio worker threads and risks deadlocks. Use atomics (`AtomicI32`, etc.) for lock-free access to rarely-written values, or make the function `async` and `.await` the lock
 
 See [docs/code-style.md](docs/code-style.md#design-principles) for detailed design guidelines.
 
